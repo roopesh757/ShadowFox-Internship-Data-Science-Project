@@ -1,0 +1,98 @@
+#import libraries
+import numpy as np 
+import pandas as pd 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Load dataset and parse date column
+df=pd.read_csv("delhiaqi.csv",parse_dates=["date"])
+# Display first rows 
+print(df.head())
+
+# Dataset structure 
+print(df.info())
+# Statistical summary 
+print(df.describe())
+# Check missing values 
+print(df.isnull().sum())
+
+# view column names
+print(df.columns)
+# Convert date to datetime 
+df["date"]=pd.to_datetime(df["date"],dayfirst=True,errors="coerce")
+# Drop invalid dates 
+df=df.dropna(subset=["date"])
+
+pollutants = ["pm2_5", "pm10", "no2", "so2", "co", "o3", "nh3"]
+# Remove negative values 
+for p in pollutants:
+    df = df[df[p] >= 0]
+# Fill missing values with mean
+df[pollutants] = df[pollutants].fillna(np.mean(df[pollutants]))
+
+# Extract month and hour
+df["month"] = df["date"].dt.month
+df["hour"] = df["date"].dt.hour
+
+#Season classification function
+def season(m):
+    if m in [12,1,2]: return "Winter"
+    elif m in [3,4,5]: return "Summer"
+    elif m in [6,7,8,9]: return "Monsoon"
+    else: return "Post-Monsoon"
+# Apply season labels
+df["season"] = df["month"].apply(season)
+
+#AQI calculation using PM2.5 and PM10
+df["AQI"]=(
+    (df["pm2_5"]/df["pm2_5"].max())*0.6+
+    (df["pm10"]/df["pm10"].max())*0.4
+)*500
+
+def aqi_category(a):
+    if a<=50:return "Good"
+    elif a<=100:return "Satisfactory"
+    elif a<=200:return "Moderate"
+    elif a<=300:return "Poor"
+    elif a<=400:return "Very Poor"
+    else:return "Severe"
+df["AQI_Category"]=df["AQI"].apply(aqi_category)
+
+df.groupby("season")["AQI"].mean()
+
+#Box Plot
+sns.boxplot(x="season",y="AQI",data=df)
+plt.title("Seasonal AQI Variation i Delhi")
+plt.show()
+
+#Line Plot
+daily_aqi=df.resample("D",on="date")["AQI"].mean()
+plt.figure(figsize=(10,4))
+plt.plot(daily_aqi)
+plt.title("Daily AQI Trend in Delhi")
+plt.xlabel("Date")
+plt.ylabel("AQI")
+plt.grid()
+plt.show()
+
+#Scatter Plot
+plt.figure(figsize=(7,4))
+plt.scatter(df["pm2_5"], df["AQI"], alpha=0.5)
+plt.xlabel("PM2.5 Concentration")
+plt.ylabel("AQI")
+plt.title("Relationship Between PM2.5 and AQI")
+plt.show()
+
+#Bar Plot
+aqi_counts = df["AQI_Category"].value_counts()
+plt.figure(figsize=(7,4))
+aqi_counts.plot(kind="bar")
+plt.xlabel("AQI Category")
+plt.ylabel("Number of Observations")
+plt.title("Distribution of AQI Categories in Delhi")
+plt.show()
+
+#Heatmap
+sns.heatmap(df[pollutants+["AQI"]].corr(),annot=True,cmap="coolwarm")
+plt.title("Correlation Between Pollutants and AQI")
+plt.show()
